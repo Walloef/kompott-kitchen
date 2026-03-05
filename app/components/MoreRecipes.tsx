@@ -31,7 +31,7 @@ function RecipePreview({
         </div>
       )}
 
-      <div className="text-sm my-4">
+      <div className="text-sm my-3">
         <DateComponent dateString={publishedDate} />
       </div>
 
