@@ -1,0 +1,99 @@
+fragment PostFields on PageBlogPost {
+  sys {
+    id
+  }
+  slug
+  title
+  shortDescription
+  publishedDate
+  seoFields {
+    ...SeoFields
+  }
+  featuredImage {
+    ...ImageFields
+  }
+  author {
+    ... on ComponentAuthor {
+      sys {
+        id
+      }
+      name
+      avatar {
+        ...ImageFields
+      }
+    }
+  }
+  content {
+    json
+    links {
+      assets {
+        block {
+          ...ImageFields
+        }
+      }
+      entries {
+        block {
+          __typename
+          ... on ComponentRichImage {
+            ...RichImageFields
+          }
+          ... on ComponentYoutubeVideo {
+            ...YoutubeVideoFields
+          }
+        }
+      }
+    }
+  }
+}
+
+query GetAllPosts($preview: Boolean!) {
+  pageBlogPostCollection(
+    where: { slug_exists: true }
+    order: publishedDate_DESC
+    preview: $preview
+  ) {
+    items {
+      ...PostFields
+    }
+  }
+}
+
+query GetPreviewPost($slug: String!) {
+  pageBlogPostCollection(where: { slug: $slug }, preview: true, limit: 1) {
+    items {
+      ...PostFields
+    }
+  }
+}
+
+query GetPostAndMore($slug: String!, $preview: Boolean!) {
+  pageBlogPostCollection(where: { slug: $slug }, preview: $preview, limit: 1) {
+    items {
+      ...PostFields
+    }
+  }
+  morePostsCollection: pageBlogPostCollection(
+    where: { slug_not: $slug }
+    order: publishedDate_DESC
+    preview: $preview
+    limit: 2
+  ) {
+    items {
+      ...PostFields
+    }
+  }
+}
+
+query GetPaginatedPosts($preview: Boolean!, $limit: Int!, $skip: Int!) {
+  pageBlogPostCollection(
+    preview: $preview
+    limit: $limit
+    skip: $skip
+    order: publishedDate_DESC
+  ) {
+    total
+    items {
+      ...PostFields
+    }
+  }
+}

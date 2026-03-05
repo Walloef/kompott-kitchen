@@ -1,101 +1,79 @@
 import Link from "next/link";
 import { draftMode } from "next/headers";
+import { Metadata } from "next";
 
-import Date from "./date";
-import CoverImage from "./cover-image";
-import Avatar from "./avatar";
-import MoreStories from "./more-stories";
+import { getLandingPage, getPaginatedPosts } from "@/lib/api";
+import {
+  PostFieldsFragmentDoc,
+  LandingPageFieldsFragmentDoc,
+  PostFieldsFragment,
+} from "@/generated/graphql";
+import { useFragment } from "@/generated/fragment-masking";
+import { Markdown } from "@/lib/markdown";
+import { getMetadata } from "@/helpers/getMetaData";
 
-import { getAllPosts } from "@/lib/api";
-import { CMS_NAME, CMS_URL } from "@/lib/constants";
+import MoreRecipes from "./components/MoreRecipes";
+import Header from "./components/Header";
 
-function Intro() {
-  return (
-    <section className="flex-col md:flex-row flex items-center md:justify-between mt-16 mb-16 md:mb-12">
-      <h1 className="text-6xl md:text-8xl font-bold tracking-tighter leading-tight md:pr-8">
-        Blog.
-      </h1>
-      <h2 className="text-center md:text-left text-lg mt-5 md:pl-8">
-        A statically generated blog example using{" "}
-        <a
-          href="https://nextjs.org/"
-          className="underline hover:text-success duration-200 transition-colors"
-        >
-          Next.js
-        </a>{" "}
-        and{" "}
-        <a
-          href={CMS_URL}
-          className="underline hover:text-success duration-200 transition-colors"
-        >
-          {CMS_NAME}
-        </a>
-        .
-      </h2>
-    </section>
-  );
-}
+export async function generateMetadata(): Promise<Metadata> {
+  const { isEnabled } = await draftMode();
+  const maskedLanding = await getLandingPage(isEnabled);
 
-function HeroPost({
-  title,
-  coverImage,
-  date,
-  excerpt,
-  author,
-  slug,
-}: {
-  title: string;
-  coverImage: any;
-  date: string;
-  excerpt: string;
-  author: any;
-  slug: string;
-}) {
-  return (
-    <section>
-      <div className="mb-8 md:mb-16">
-        <CoverImage title={title} slug={slug} url={coverImage.url} />
-      </div>
-      <div className="md:grid md:grid-cols-2 md:gap-x-16 lg:gap-x-8 mb-20 md:mb-28">
-        <div>
-          <h3 className="mb-4 text-4xl lg:text-6xl leading-tight">
-            <Link href={`/posts/${slug}`} className="hover:underline">
-              {title}
-            </Link>
-          </h3>
-          <div className="mb-4 md:mb-0 text-lg">
-            <Date dateString={date} />
-          </div>
-        </div>
-        <div>
-          <p className="text-lg leading-relaxed mb-4">{excerpt}</p>
-          {author && <Avatar name={author.name} picture={author.picture} />}
-        </div>
-      </div>
-    </section>
-  );
+  const landing = useFragment(LandingPageFieldsFragmentDoc, maskedLanding);
+
+  return getMetadata(landing?.seoFields, landing?.internalName);
 }
 
 export default async function Page() {
-  const { isEnabled } = draftMode();
-  const allPosts = await getAllPosts(isEnabled);
-  const heroPost = allPosts[0];
-  const morePosts = allPosts.slice(1);
+  const { isEnabled } = await draftMode();
+  const maskedLanding = await getLandingPage(isEnabled);
+  const landing = useFragment(LandingPageFieldsFragmentDoc, maskedLanding);
+
+  if (!landing) {
+    return (
+      <div className="container mx-auto px-5 mt-16">
+        <p className="text-lg mb-4">No landing page content found.</p>
+        <Link
+          href="/recipes"
+          className="underline hover:text-success duration-200 transition-colors"
+        >
+          View all recipes →
+        </Link>
+      </div>
+    );
+  }
+
+  const { posts } = await getPaginatedPosts(1, 3, isEnabled);
+
+  const post = posts.reduce<PostFieldsFragment[]>((acc, maskedPost) => {
+    const post = maskedPost
+      ? useFragment(PostFieldsFragmentDoc, maskedPost)
+      : null;
+    if (post) {
+      acc.push(post);
+    }
+    return acc;
+  }, []);
 
   return (
-    <div className="container mx-auto px-5">
-      <Intro />
-      {heroPost && (
-        <HeroPost
-          title={heroPost.title}
-          coverImage={heroPost.coverImage}
-          date={heroPost.date}
-          author={heroPost.author}
-          slug={heroPost.slug}
-          excerpt={heroPost.excerpt}
-        />
-      )}
-      <MoreStories morePosts={morePosts} />
-    </div>
+    <>
+      <Header tag="h1" showLink>
+        <div className="group">
+          <span className="-rotate-3 origin-bottom-left group-hover:animate-rock -mb-[14px] block">
+            Kompott
+          </span>
+          <span>kitchen.</span>
+        </div>
+      </Header>
+      <div className="container mx-auto px-5">
+        <section className="mb-20">
+          <div className="max-w-[75ch] mb-3">
+            <Markdown content={landing.ingress} />
+          </div>
+        </section>
+      </div>
+
+      <MoreRecipes moreRecipes={post} />
+    </>
   );
 }

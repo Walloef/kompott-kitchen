@@ -1,35 +1,22 @@
-const POST_GRAPHQL_FIELDS = `
-  slug
-  title
-  coverImage {
-    url
-  }
-  date
-  author {
-    name
-    picture {
-      url
-    }
-  }
-  excerpt
-  content {
-    json
-    links {
-      assets {
-        block {
-          sys {
-            id
-          }
-          url
-          description
-        }
-      }
-    }
-  }
-`;
+import { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import { print } from "graphql";
+import {
+  GetAllPostsDocument,
+  GetLandingPageDocument,
+  GetPaginatedPostsDocument,
+  GetPostAndMoreDocument,
+  GetPreviewPostDocument,
+  PostFieldsFragmentDoc,
+} from "@/generated/graphql";
+import { useFragment } from "@/generated/fragment-masking";
 
-async function fetchGraphQL(query: string, preview = false): Promise<any> {
-  return fetch(
+async function fetchGraphQL<T, TVariables>(
+  document: TypedDocumentNode<T, TVariables>,
+  variables: TVariables,
+  preview = false,
+  tags: string[] = [],
+): Promise<T> {
+  const res = await fetch(
     `https://graphql.contentful.com/content/v1/spaces/${process.env.CONTENTFUL_SPACE_ID}`,
     {
       method: "POST",
@@ -41,80 +28,99 @@ async function fetchGraphQL(query: string, preview = false): Promise<any> {
             : process.env.CONTENTFUL_ACCESS_TOKEN
         }`,
       },
-      body: JSON.stringify({ query }),
-      next: { tags: ["posts"] },
+      body: JSON.stringify({
+        query: print(document),
+        variables,
+      }),
+      ...(preview
+        ? { cache: "no-store" }
+        : { next: { tags: ["contentful", ...tags] } }),
     },
-  ).then((response) => response.json());
-}
-
-function extractPost(fetchResponse: any): any {
-  return fetchResponse?.data?.postCollection?.items?.[0];
-}
-
-function extractPostEntries(fetchResponse: any): any[] {
-  return fetchResponse?.data?.postCollection?.items;
-}
-
-export async function getPreviewPostBySlug(slug: string | null): Promise<any> {
-  const entry = await fetchGraphQL(
-    `query {
-      postCollection(where: { slug: "${slug}" }, preview: true, limit: 1) {
-        items {
-          ${POST_GRAPHQL_FIELDS}
-        }
-      }
-    }`,
-    true,
   );
-  return extractPost(entry);
+
+  const json = await res.json();
+
+  if (json.errors) {
+    throw new Error(JSON.stringify(json.errors));
+  }
+
+  return json.data as T;
 }
 
-export async function getAllPosts(isDraftMode: boolean): Promise<any[]> {
-  const entries = await fetchGraphQL(
-    `query {
-      postCollection(where: { slug_exists: true }, order: date_DESC, preview: ${
-        isDraftMode ? "true" : "false"
-      }) {
-        items {
-          ${POST_GRAPHQL_FIELDS}
-        }
-      }
-    }`,
-    isDraftMode,
+export async function getAllPosts(preview: boolean) {
+  const data = await fetchGraphQL(GetAllPostsDocument, { preview }, preview, [
+    "posts",
+  ]);
+
+  const items = (data?.pageBlogPostCollection?.items ?? []).filter(
+    (item): item is NonNullable<typeof item> => item !== null,
   );
-  return extractPostEntries(entries);
+  return useFragment(PostFieldsFragmentDoc, items);
 }
 
-export async function getPostAndMorePosts(
-  slug: string,
-  preview: boolean,
-): Promise<any> {
-  const entry = await fetchGraphQL(
-    `query {
-      postCollection(where: { slug: "${slug}" }, preview: ${
-        preview ? "true" : "false"
-      }, limit: 1) {
-        items {
-          ${POST_GRAPHQL_FIELDS}
-        }
-      }
-    }`,
+export async function getPreviewPostBySlug(slug: string | null) {
+  if (!slug) return undefined;
+  const data = await fetchGraphQL(GetPreviewPostDocument, { slug }, true, [
+    "posts",
+    `post-${slug}`,
+  ]);
+
+  const item = data?.pageBlogPostCollection?.items?.[0];
+  return item ? useFragment(PostFieldsFragmentDoc, item) : undefined;
+}
+
+export async function getPostAndMorePosts(slug: string, preview: boolean) {
+  const data = await fetchGraphQL(
+    GetPostAndMoreDocument,
+    { slug, preview },
     preview,
+    ["posts", `post-${slug}`],
   );
-  const entries = await fetchGraphQL(
-    `query {
-      postCollection(where: { slug_not_in: "${slug}" }, order: date_DESC, preview: ${
-        preview ? "true" : "false"
-      }, limit: 2) {
-        items {
-          ${POST_GRAPHQL_FIELDS}
-        }
-      }
-    }`,
-    preview,
+
+  const recipe = data?.pageBlogPostCollection?.items?.[0];
+  const moreRecipes = (data?.morePostsCollection?.items ?? []).filter(
+    (item): item is NonNullable<typeof item> => item !== null,
   );
+
   return {
-    post: extractPost(entry),
-    morePosts: extractPostEntries(entries),
+    recipe: recipe ? useFragment(PostFieldsFragmentDoc, recipe) : undefined,
+    moreRecipes: useFragment(PostFieldsFragmentDoc, moreRecipes),
   };
+}
+
+export async function getPaginatedPosts(
+  page: number,
+  limit: number,
+  isDraftMode = false,
+) {
+  const skip = (page - 1) * limit;
+
+  const data = await fetchGraphQL(
+    GetPaginatedPostsDocument,
+    {
+      preview: isDraftMode,
+      limit,
+      skip,
+    },
+    isDraftMode,
+    ["posts"],
+  );
+
+  return {
+    posts: data?.pageBlogPostCollection?.items ?? [],
+    total: data?.pageBlogPostCollection?.total ?? 0,
+  };
+}
+
+export async function getLandingPage(isDraftMode = false) {
+  const data = await fetchGraphQL(
+    GetLandingPageDocument,
+    {
+      preview: isDraftMode,
+    },
+    isDraftMode,
+    ["landing-page"],
+  );
+
+  return data?.pageLandingCollection?.items?.[0] ?? null;
 }

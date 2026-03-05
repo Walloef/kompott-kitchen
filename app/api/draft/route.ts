@@ -1,2 +1,20 @@
-//@ts-ignore
-export { enableDraftHandler as GET } from "@contentful/vercel-nextjs-toolkit/app-router";
+import { draftMode } from "next/headers";
+import { redirect } from "next/navigation";
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const secret = searchParams.get("secret");
+  const slug = searchParams.get("slug");
+
+  if (secret !== process.env.CONTENTFUL_PREVIEW_SECRET) {
+    return new Response("Invalid preview token", { status: 401 });
+  }
+
+  if (!slug) {
+    return new Response("Missing slug parameter", { status: 400 });
+  }
+
+  (await draftMode()).enable();
+
+  redirect(slug);
+}

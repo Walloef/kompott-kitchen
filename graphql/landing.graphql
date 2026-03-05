@@ -1,0 +1,41 @@
+fragment LandingPageFields on PageLanding {
+  sys {
+    id
+  }
+  ingress {
+    json
+    links {
+      assets {
+        block {
+          ...ImageFields
+        }
+      }
+      entries {
+        block {
+          ...RichImageFields
+          ...YoutubeVideoFields
+        }
+      }
+    }
+  }
+  internalName
+  seoFields {
+    ...SeoFields
+  }
+  featuredBlogPost {
+    ...PostFields
+  }
+  blockWrapperCollection(limit: 5) {
+    items {
+      ...BlockWrapperFields
+    }
+  }
+}
+
+query GetLandingPage($preview: Boolean!) {
+  pageLandingCollection(preview: $preview, limit: 1) {
+    items {
+      ...LandingPageFields
+    }
+  }
+}

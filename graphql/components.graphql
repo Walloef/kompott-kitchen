@@ -1,0 +1,83 @@
+fragment ImageFields on Asset {
+  sys {
+    id
+  }
+  url
+  description
+  width
+  height
+}
+
+fragment SeoFields on ComponentSeo {
+  sys {
+    id
+  }
+  pageTitle
+  pageDescription
+  canonicalUrl
+  nofollow
+  noindex
+  shareImagesCollection(limit: 1) {
+    items {
+      ...ImageFields
+    }
+  }
+}
+
+fragment RichImageFields on ComponentRichImage {
+  sys {
+    id
+  }
+  internalName
+  caption
+  fullWidth
+  image {
+    ...ImageFields
+  }
+}
+
+fragment YoutubeVideoFields on ComponentYoutubeVideo {
+  sys {
+    id
+  }
+  internalName
+  youtubeUrl
+  caption
+  fullWidth
+  image {
+    ...ImageFields
+  }
+}
+
+fragment GenericBlockFields on GenericBlock {
+  sys {
+    id
+  }
+  title
+  slug
+  image {
+    ...ImageFields
+  }
+  content {
+    json
+    links {
+      assets {
+        block {
+          ...ImageFields
+        }
+      }
+    }
+  }
+}
+
+fragment BlockWrapperFields on BlockWrapper {
+  sys {
+    id
+  }
+  title
+  blocksCollection(limit: 1) {
+    items {
+      ...GenericBlockFields
+    }
+  }
+}
